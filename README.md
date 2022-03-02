@@ -23,3 +23,9 @@ _IS-Gap_ aims to make academic material digestible, searchable, and accessible t
   - [ ] paper title
   - [ ] paper author
 - [ ] Allow users to "Like" specific summaries of a paper
+
+---
+
+#TODO:
+
+- [ ] Set up TRPC endpoints
