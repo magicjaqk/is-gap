@@ -1,82 +1,71 @@
-import "../styles/globals.css";
+// src/pages/_app.tsx
 import { httpBatchLink } from "@trpc/client/links/httpBatchLink";
 import { loggerLink } from "@trpc/client/links/loggerLink";
 import { withTRPC } from "@trpc/next";
-import { AppProps } from "next/app";
-import { AppType } from "next/dist/shared/lib/utils";
-import { AppRouter } from "../server/routers/_app";
+import { SessionProvider } from "next-auth/react";
 import superjson from "superjson";
+import type { AppType } from "next/app";
+import type { AppRouter } from "../server/router";
+import type { Session } from "next-auth";
+import "../styles/globals.css";
 
-const MyApp = (({ Component, pageProps }: AppProps) => {
-  return <Component {...pageProps} />;
-}) as AppType;
+const MyApp: AppType<{ session: Session | null }> = ({
+  Component,
+  pageProps: { session, ...pageProps },
+}) => {
+  return (
+    <SessionProvider session={session}>
+      <Component {...pageProps} />
+    </SessionProvider>
+  );
+};
 
-function getBaseUrl() {
-  if (process.browser) {
-    return "";
-  }
-  // reference for vercel.com
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-
-  // // reference for render.com
-  if (process.env.RENDER_INTERNAL_HOSTNAME) {
-    return `http://${process.env.RENDER_INTERNAL_HOSTNAME}:${process.env.PORT}`;
-  }
-
-  // assume localhost
-  return `http://localhost:${process.env.PORT ?? 3000}`;
-}
+const getBaseUrl = () => {
+  if (typeof window !== "undefined") return ""; // browser should use relative url
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`; // SSR should use vercel url
+  return `http://localhost:${process.env.PORT ?? 3000}`; // dev SSR should use localhost
+};
 
 export default withTRPC<AppRouter>({
-  config() {
+  config({ ctx }) {
     /**
      * If you want to use SSR, you need to use the server's full URL
      * @link https://trpc.io/docs/ssr
      */
+    const url = `${getBaseUrl()}/api/trpc`;
+
     return {
-      /**
-       * @link https://trpc.io/docs/links
-       */
       links: [
-        // adds pretty logs to your console in development and logs errors in production
         loggerLink({
           enabled: (opts) =>
             process.env.NODE_ENV === "development" ||
             (opts.direction === "down" && opts.result instanceof Error),
         }),
-        httpBatchLink({
-          url: `${getBaseUrl()}/api/trpc`,
-        }),
+        httpBatchLink({ url }),
       ],
-      /**
-       * @link https://trpc.io/docs/data-transformers
-       */
+      url,
       transformer: superjson,
       /**
        * @link https://react-query.tanstack.com/reference/QueryClient
        */
       // queryClientConfig: { defaultOptions: { queries: { staleTime: 60 } } },
+
+      // To use SSR properly you need to forward the client's headers to the server
+      // headers: () => {
+      //   if (ctx?.req) {
+      //     const headers = ctx?.req?.headers;
+      //     delete headers?.connection;
+      //     return {
+      //       ...headers,
+      //       "x-ssr": "1",
+      //     };
+      //   }
+      //   return {};
+      // }
     };
   },
   /**
    * @link https://trpc.io/docs/ssr
    */
-  ssr: true,
-  /**
-   * Set headers or status code when doing SSR
-   */
-  responseMeta({ clientErrors }) {
-    if (clientErrors.length) {
-      // propagate http first error from API calls
-      return {
-        status: clientErrors[0].data?.httpStatus ?? 500,
-      };
-    }
-
-    // for app caching with SSR see https://trpc.io/docs/caching
-
-    return {};
-  },
+  ssr: false,
 })(MyApp);
